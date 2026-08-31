@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>x402 Preflight — check an endpoint before you pay it</title>
+<style>
+  :root{--bg:#0b0e11;--ink:#e6ecf1;--dim:#7b8a97;--acc:#7fd8ff;--warn:#ffcf7a;--line:rgba(230,236,241,.14)}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 ui-monospace,"SF Mono",Menlo,Consolas,monospace;padding:3rem 1.25rem 5rem}
+  main{max-width:52rem;margin:0 auto}
+  h1{font-size:clamp(1.6rem,4.5vw,2.4rem);margin:0 0 .4rem;letter-spacing:-.01em}
+  .sub{color:var(--dim);margin:0 0 2.5rem}
+  h2{font-size:.78rem;letter-spacing:.3em;text-transform:uppercase;color:var(--acc);margin:2.6rem 0 .8rem;font-weight:400}
+  code,pre{background:#11161b;border:1px solid var(--line);border-radius:4px}
+  code{padding:.1rem .35rem;font-size:.88em}
+  pre{padding:1rem;overflow-x:auto;font-size:.82rem;line-height:1.6}
+  a{color:var(--acc)}
+  table{border-collapse:collapse;width:100%;font-size:.88rem;margin-top:.6rem}
+  th,td{text-align:left;padding:.5rem .7rem;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:400;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase}
+  .live{border:1px solid var(--line);padding:1rem;border-radius:4px;background:#0e1317}
+  .live b{color:var(--warn);font-weight:400}
+  .note{color:var(--dim);font-size:.85rem;margin-top:.6rem}
+</style>
+</head>
+<body>
+<main>
+  <h1>x402 Preflight</h1>
+  <p class="sub">Check an x402 endpoint before you pay it.</p>
+
+  <p>
+    Catalogues now list hundreds of paid x402 endpoints. The advertised price,
+    settlement network and recipient wallet are not always what the endpoint
+    actually asks for once you call it, and some do not answer at all. There is
+    exactly one way to find out without spending: send an unpaid request and
+    read the 402 challenge it returns.
+  </p>
+  <p>That is all this service does, and it does it carefully.</p>
+
+  <h2>Live endpoint</h2>
+  <div class="live">
+    <div>Discovery: <b id="disc">/.well-known/x402-preflight.json</b></div>
+    <div class="note">
+      The paid endpoint runs behind a rotating host. Read the discovery document
+      above for the current base URL rather than hard-coding one — it is updated
+      automatically whenever the address changes.
+    </div>
+  </div>
+
+  <h2>What you get</h2>
+  <table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td><code>verdict</code></td><td><code>safe_to_attempt</code>, <code>pay_with_caution</code>, <code>do_not_pay</code>, <code>unreachable</code></td></tr>
+    <tr><td><code>challenge</code></td><td>parsed 402: schemes, networks, recipients, amounts, asset, timeout</td></tr>
+    <tr><td><code>findings</code></td><td>each blocking or warning issue, with a reason you can act on</td></tr>
+    <tr><td><code>latency_ms</code></td><td>measured on the probe itself</td></tr>
+  </table>
+
+  <h2>Checks it performs</h2>
+  <ul>
+    <li>Endpoint answers <code>402</code> at all — a paid resource that returns <code>200</code> unpaid is not selling what the catalogue says.</li>
+    <li>Recipient address is well-formed for the network it claims (EVM or base58 Solana).</li>
+    <li>Amount is an integer in base units — a decimal here means clients will misprice the call.</li>
+    <li>Multiple recipients in one challenge, which deserve a second look before paying.</li>
+    <li>Optional: recipient, network and price ceiling match what <em>you</em> expected. A mismatch is reported as blocking.</li>
+  </ul>
+
+  <h2>Example</h2>
+  <pre>POST /preflight
+{
+  "url": "https://some-api.example/paid",
+  "expect": { "pay_to": "0x…", "network": "base", "max_amount": "50000" }
+}</pre>
+  <pre>{
+  "verdict": "pay_with_caution",
+  "http_status": 402,
+  "latency_ms": 616,
+  "challenge": {
+    "speaks_x402": true,
+    "networks": ["base", "solana"],
+    "pay_to": ["0x52Ab…6C06", "3nmeVj…rSgw"],
+    "amounts": ["50000", "50000"]
+  },
+  "findings": [
+    { "level": "warning", "code": "payto_multiple",
+      "detail": "Challenge offers several different recipients. Verify which one you are paying." },
+    { "level": "ok", "code": "price_within_ceiling", "detail": "Price is within your ceiling." }
+  ]
+}</pre>
+
+  <h2>Price</h2>
+  <p>0.004 USDC per call, settled on Base. Free: <code>/health</code> and <code>/schema</code>.</p>
+
+  <h2>What it does not claim</h2>
+  <p>
+    This is an unpaid probe. It reports what an endpoint <em>advertises</em> before
+    payment. It does not prove the endpoint returns a useful response after you
+    pay, and it says so in every response. Targets must be public http(s);
+    private and loopback addresses are refused, so it cannot be used to scan
+    someone's internal network.
+  </p>
+
+  <p class="note">Operated by Kai Renn. Source and discovery document in this repository.</p>
+</main>
+<script>
+fetch('./.well-known/x402-preflight.json').then(r=>r.json()).then(j=>{
+  document.getElementById('disc').textContent = j.base_url || 'offline';
+}).catch(()=>{});
+</script>
+</body>
+</html>
