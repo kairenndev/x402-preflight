@@ -18,6 +18,26 @@ import { createServer } from 'node:http';
 const PORT = Number(process.env.PORT || 8402);
 const PAYOUT = '0xdD107957D2F39A0EAfE8A8679aCb2f227aa42b10'; // Base, USDC
 
+/*
+ * Расчёт идёт через фасилитатор PayAI.
+ *
+ * Почему именно он. Проверено 02.09: публичные фасилитаторы x402.org и
+ * x402.rs держат только тестовые сети — Base mainnet (eip155:8453) нет ни у
+ * одного. На mainnet живут два: CDP от Coinbase (нужен аккаунт и ключи) и
+ * PayAI. У PayAI бесплатный тариф — до 1000 расчётов, ключ не требуется,
+ * а комиссия за его пределами «covers gas and RPC costs», то есть газ платит
+ * он, а не я. Это снимает то, что я неделю считал стеной: продавать можно
+ * при нулевом балансе и без единого цента на газ.
+ *
+ * Лимит считается на кошелёк-получатель, поэтому 1000 расчётов — мои.
+ */
+const FACILITATOR = process.env.FACILITATOR || 'https://facilitator.payai.network';
+
+const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+const NETWORK_V1 = 'base';           // как сеть зовётся в x402 v1
+const NETWORK_V2 = 'eip155:8453';    // она же в v2, CAIP-2
+const PRICE_UNITS = '4000';          // 0.004 USDC, у USDC 6 знаков
+
 /* ---------------------------------------------------------------- утилиты */
 
 function json(res, code, body, extra = {}) {
@@ -232,24 +252,147 @@ async function preflight(target, expect = {}) {
 /* ------------------------------------------------------------------ маршруты */
 
 const PRICE_USDC = '0.004';
+const DESCRIPTION = 'One unpaid-probe preflight report for an x402 endpoint.';
 
+/*
+ * Требования к оплате в двух видах.
+ *
+ * Клиенты в поле разные: часть говорит по v1 (заголовок X-PAYMENT, сеть зовётся
+ * "base", сумма в maxAmountRequired), часть по v2 (заголовок PAYMENT-SIGNATURE,
+ * сеть по CAIP-2, сумма в amount). Отвечать нужно обоим, иначе половина рынка
+ * просто не сможет заплатить.
+ */
+
+/*
+ * Заявка на попадание в каталог PayAI Bazaar.
+ *
+ * Каталог наполняется сам: фасилитатор вынимает эту декларацию из платежа на
+ * /verify или /settle и заводит запись. Ни формы, ни аккаунта, ни оплаты —
+ * verify денег не двигает. Для v1 декларация едет внутри требований к оплате,
+ * то есть целиком под моим контролем; в v2 её должен переслать клиент
+ * покупателя, и если он этого не делает, запись не появится. Поэтому v1
+ * оставлен в списке принимаемых — он надёжнее именно для листинга.
+ */
+const BAZAAR_INPUT = {
+  type: 'http',
+  method: 'POST',
+  bodyType: 'json',
+  discoverable: true,
+  body: {
+    url: 'https://example.com/paid-endpoint',
+    expect: {
+      pay_to: '0x… optional: recipient you were promised',
+      network: 'base — optional',
+      max_amount: '10000 — optional, base units',
+    },
+  },
+};
+
+const BAZAAR_OUTPUT = {
+  type: 'json',
+  example: {
+    verdict: 'do_not_pay',
+    http_status: 402,
+    challenge: { pay_to: ['0x…'], networks: ['base'], amounts: ['10000'] },
+    findings: [{ level: 'blocking', code: 'payto_mismatch', detail: 'Endpoint asks payment to a different address than you expected.' }],
+  },
+};
+
+function requirementsV1(resource) {
+  return {
+    scheme: 'exact',
+    network: NETWORK_V1,
+    maxAmountRequired: PRICE_UNITS,
+    resource,
+    description: DESCRIPTION,
+    mimeType: 'application/json',
+    payTo: PAYOUT,
+    maxTimeoutSeconds: 120,
+    asset: USDC_BASE,
+    // Имя из EIP-712 домена самого контракта, а не тикер: на Base это "USD Coin".
+    // Считано с 0x8335…2913 замером 02.09; с "USDC" фасилитатор отвечает
+    // invalid_exact_evm_token_name_mismatch, потому что подпись собирается
+    // по домену и расходится побайтно.
+    extra: { name: 'USD Coin', version: '2' },
+    outputSchema: { input: BAZAAR_INPUT, output: BAZAAR_OUTPUT },
+  };
+}
+
+function requirementsV2(resource) {
+  return {
+    scheme: 'exact',
+    network: NETWORK_V2,
+    amount: PRICE_UNITS,
+    asset: USDC_BASE,
+    payTo: PAYOUT,
+    maxTimeoutSeconds: 120,
+    resource,
+    description: DESCRIPTION,
+    mimeType: 'application/json',
+    // Имя из EIP-712 домена самого контракта, а не тикер: на Base это "USD Coin".
+    // Считано с 0x8335…2913 замером 02.09; с "USDC" фасилитатор отвечает
+    // invalid_exact_evm_token_name_mismatch, потому что подпись собирается
+    // по домену и расходится побайтно.
+    extra: { name: 'USD Coin', version: '2' },
+  };
+}
+
+/** Тело ответа 402: обе версии сразу, чтобы клиент выбрал свою. */
 function offer(resource) {
   return {
-    x402Version: 1,
+    x402Version: 2,
     error: 'payment_required',
-    accepts: [{
-      scheme: 'exact',
-      network: 'base',
-      maxAmountRequired: '4000',            // 0.004 USDC, 6 знаков
-      resource,
-      description: 'One unpaid-probe preflight report for an x402 endpoint.',
+    resource: {
+      url: resource,
+      description: DESCRIPTION,
       mimeType: 'application/json',
-      payTo: PAYOUT,
-      maxTimeoutSeconds: 120,
-      asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC на Base
-      extra: { name: 'USD Coin', version: '2' },
-    }],
+      serviceName: 'x402 Preflight',
+      tags: ['x402', 'preflight', 'verification', 'safety', 'agents'],
+    },
+    accepts: [requirementsV2(resource), requirementsV1(resource)],
+    extensions: {
+      bazaar: { info: { input: BAZAAR_INPUT, output: BAZAAR_OUTPUT } },
+    },
   };
+}
+
+/* --------------------------------------------------- разговор с фасилитатором */
+
+function decodeHeader(raw) {
+  try { return JSON.parse(Buffer.from(String(raw), 'base64').toString('utf8')); }
+  catch { return null; }
+}
+
+async function facilitator(route, body) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 30_000);
+  try {
+    const r = await fetch(FACILITATOR + route, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctl.signal,
+    });
+    const text = await r.text();
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch { /* ниже */ }
+    /*
+     * EXTENSION-RESPONSES — единственный способ узнать, попал ли сервис в
+     * каталог: processing, rejected с причиной, либо заголовка нет вовсе, и
+     * тогда декларация до фасилитатора не доехала. Тащим его наружу, иначе
+     * листинг диагностировать нечем.
+     */
+    return {
+      httpStatus: r.status,
+      body: parsed,
+      raw: text.slice(0, 500),
+      extensions: r.headers.get('extension-responses') || null,
+    };
+  } catch (e) {
+    return { httpStatus: 0, body: null, raw: e.name === 'AbortError' ? 'timeout_30s' : String(e.message) };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const server = createServer(async (req, res) => {
@@ -276,7 +419,16 @@ const server = createServer(async (req, res) => {
       summary: 'Check an x402 endpoint before you pay it.',
       why: 'Catalogues list hundreds of paid endpoints. The advertised price, network and recipient are not always what the endpoint actually asks for, and some do not answer at all. This probes without paying and tells you whether to spend.',
       payout_wallet: PAYOUT,
-      settlement: { network: 'base', asset: 'USDC' },
+      settlement: {
+        network: 'base',
+        network_caip2: NETWORK_V2,
+        asset: 'USDC',
+        asset_address: USDC_BASE,
+        scheme: 'exact',
+        x402_versions: [1, 2],
+        facilitator: FACILITATOR,
+        price_base_units: PRICE_UNITS,
+      },
       endpoints: [
         { path: '/health', price: 'free', method: 'GET', returns: 'liveness' },
         { path: '/schema', price: 'free', method: 'GET', returns: 'this document' },
@@ -295,21 +447,103 @@ const server = createServer(async (req, res) => {
   if (path === '/preflight') {
     if (req.method !== 'POST') return json(res, 405, { error: 'method_not_allowed', use: 'POST' });
 
-    const paid = req.headers['x-payment'] || req.headers['payment-signature'] || req.headers['x-payment-signature'];
+    const resource = 'https://' + (req.headers.host || 'localhost') + '/preflight';
+    const paid = req.headers['payment-signature'] || req.headers['x-payment'] || req.headers['x-payment-signature'];
+
+    /*
+     * Тело читаем сразу, до похода к фасилитатору. Если оставить поток
+     * недочитанным на время сетевого вызова, клиент успевает упереться в
+     * таймаут отправки, и запрос рвётся уже после того, как деньги списаны.
+     */
+    let payload = null;
+    let bodyError = null;
+    try { payload = JSON.parse((await readBody(req)) || '{}'); }
+    catch (e) { bodyError = e.message === 'body_too_large' ? 'body_too_large' : 'body_not_json'; }
+
     if (!paid) {
-      const resource = 'https://' + (req.headers.host || 'localhost') + '/preflight';
-      return json(res, 402, offer(resource));
+      return json(res, 402, offer(resource), {
+        'payment-required': Buffer.from(JSON.stringify(offer(resource))).toString('base64'),
+      });
     }
 
-    let payload;
-    try { payload = JSON.parse(await readBody(req) || '{}'); }
-    catch { return json(res, 400, { error: 'body_not_json' }); }
+    /*
+     * Оплату проверяет фасилитатор, а не я. Раньше здесь стояло «заголовок есть —
+     * значит заплатили», и это отдавало отчёт даром любому, кто пришлёт
+     * "x-payment: 1". Дыра найдена и закрыта 02.09; до этого сервис не мог
+     * заработать ни цента даже при живом трафике.
+     */
+    const payment = decodeHeader(paid);
+    if (!payment || !payment.payload) {
+      return json(res, 402, { ...offer(resource), error: 'payment_header_unreadable' });
+    }
+
+    const version = Number(payment.x402Version) === 1 ? 1 : 2;
+    const requirements = version === 1 ? requirementsV1(resource) : requirementsV2(resource);
+
+    const verify = await facilitator('/verify', {
+      x402Version: version,
+      paymentPayload: payment,
+      paymentRequirements: requirements,
+    });
+
+    if (verify.httpStatus === 0) {
+      return json(res, 503, { error: 'facilitator_unreachable', detail: verify.raw });
+    }
+    if (verify.extensions) console.log('bazaar (verify):', verify.extensions);
+
+    if (!verify.body?.isValid) {
+      return json(res, 402, {
+        ...offer(resource),
+        error: 'payment_invalid',
+        invalid_reason: verify.body?.invalidReason ?? verify.raw,
+      }, verify.extensions ? { 'extension-responses': verify.extensions } : {});
+    }
+
+    /*
+     * Оплата действительна. Кривой запрос отбиваем ДО расчёта — иначе я взял бы
+     * деньги за ошибку, которую даже не начал обрабатывать.
+     */
+    if (bodyError) return json(res, 400, { error: bodyError, charged: false });
 
     const t = checkTarget(payload.url || '');
-    if (!t.ok) return json(res, 400, { error: t.reason, hint: 'Provide a public http(s) URL.' });
+    if (!t.ok) return json(res, 400, { error: t.reason, hint: 'Provide a public http(s) URL.', charged: false });
 
     const report = await preflight(t.url.toString(), payload.expect || {});
-    return json(res, 200, { target: t.url.toString(), ...report });
+
+    /*
+     * Расчёт после работы, а не до. Если проба не удалась, покупателю всё равно
+     * возвращается отчёт — «unreachable» это тоже результат, за который он
+     * платил. Но если расчёт не прошёл, отдавать отчёт нельзя: это ровно та
+     * бесплатная раздача, которую я только что закрыл.
+     */
+    const settle = await facilitator('/settle', {
+      x402Version: version,
+      paymentPayload: payment,
+      paymentRequirements: requirements,
+    });
+
+    if (!settle.body?.success) {
+      return json(res, 402, {
+        ...offer(resource),
+        error: 'settlement_failed',
+        detail: settle.body?.errorReason ?? settle.raw,
+      });
+    }
+
+    const receipt = {
+      success: true,
+      transaction: settle.body.transaction,
+      network: settle.body.network,
+      payer: settle.body.payer,
+    };
+
+    if (settle.extensions) console.log('bazaar (settle):', settle.extensions);
+
+    return json(res, 200, { target: t.url.toString(), ...report, payment: receipt }, {
+      'payment-response': Buffer.from(JSON.stringify(receipt)).toString('base64'),
+      'x-payment-response': Buffer.from(JSON.stringify(receipt)).toString('base64'),
+      ...(settle.extensions ? { 'extension-responses': settle.extensions } : {}),
+    });
   }
 
   json(res, 404, { error: 'not_found', see: '/schema' });
