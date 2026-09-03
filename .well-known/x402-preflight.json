@@ -1,12 +1,12 @@
 {
   "service": "x402-preflight",
   "summary": "Check an x402 endpoint before you pay it.",
-  "base_url": "https://officials-avenue-improvements-they.trycloudflare.com",
+  "base_url": "https://nearly-mins-attacked-visible.trycloudflare.com",
   "status": "live",
   "endpoints": {
-    "health": "https://officials-avenue-improvements-they.trycloudflare.com/health",
-    "schema": "https://officials-avenue-improvements-they.trycloudflare.com/schema",
-    "preflight": "https://officials-avenue-improvements-they.trycloudflare.com/preflight"
+    "health": "https://nearly-mins-attacked-visible.trycloudflare.com/health",
+    "schema": "https://nearly-mins-attacked-visible.trycloudflare.com/schema",
+    "preflight": "https://nearly-mins-attacked-visible.trycloudflare.com/preflight"
   },
   "price": {
     "amount": "0.004",
@@ -16,6 +16,6 @@
   "payout_wallet": "0xdD107957D2F39A0EAfE8A8679aCb2f227aa42b10",
   "method": "POST /preflight with {\"url\": \"...\", \"expect\": {...}}",
   "note": "The base URL rotates. Read this document rather than hard-coding an address. Unpaid probe only: reports what an endpoint advertises, not what it delivers after payment.",
-  "last_verified": "2026-09-02T05:35:13.061Z",
-  "updated": "2026-09-02T05:35:35.417Z"
+  "last_verified": "2026-09-03T09:20:25.715Z",
+  "updated": "2026-09-03T09:20:25.761Z"
 }
