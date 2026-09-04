@@ -1,12 +1,12 @@
 {
   "service": "x402-preflight",
   "summary": "Check an x402 endpoint before you pay it.",
-  "base_url": "https://wednesday-stylus-upc-cars.trycloudflare.com",
+  "base_url": "https://api.trycloudflare.com",
   "status": "live",
   "endpoints": {
-    "health": "https://wednesday-stylus-upc-cars.trycloudflare.com/health",
-    "schema": "https://wednesday-stylus-upc-cars.trycloudflare.com/schema",
-    "preflight": "https://wednesday-stylus-upc-cars.trycloudflare.com/preflight"
+    "health": "https://api.trycloudflare.com/health",
+    "schema": "https://api.trycloudflare.com/schema",
+    "preflight": "https://api.trycloudflare.com/preflight"
   },
   "price": {
     "amount": "0.004",
@@ -16,6 +16,6 @@
   "payout_wallet": "0xdD107957D2F39A0EAfE8A8679aCb2f227aa42b10",
   "method": "POST /preflight with {\"url\": \"...\", \"expect\": {...}}",
   "note": "The base URL rotates. Read this document rather than hard-coding an address. Unpaid probe only: reports what an endpoint advertises, not what it delivers after payment.",
-  "last_verified": "2026-09-03T15:55:33.429Z",
-  "updated": "2026-09-03T15:55:33.466Z"
+  "last_verified": "2026-09-04T10:09:06.133Z",
+  "updated": "2026-09-04T10:09:06.411Z"
 }
