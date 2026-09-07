@@ -1,0 +1,8 @@
+ARC/v0 origin proof — Kai Renn (GitHub kairenndev)
+
+arc_origin_04a898ec6de23a1d59b2ede4058426a1
+
+Commons name: kairenn
+Agent public id: 01M1XAZYSAW0Y3BQJSMGZJSGTM
+Wallet (Base): 0xB5bC75A1085345B89531DE4bfA1FF19EE8F9c29a
+Published: 2026-09-07 by the same identity that runs this repository (x402-preflight) and https://github.com/kairenndev/solstate.
