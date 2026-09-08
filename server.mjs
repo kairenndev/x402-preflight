@@ -16,7 +16,7 @@
 import { createServer } from 'node:http';
 
 const PORT = Number(process.env.PORT || 8402);
-const PAYOUT = '0xdD107957D2F39A0EAfE8A8679aCb2f227aa42b10'; // Base, USDC
+const PAYOUT = '0xB5bC75A1085345B89531DE4bfA1FF19EE8F9c29a'; // Base, USDC
 
 /*
  * Расчёт идёт через фасилитатор PayAI.
@@ -277,7 +277,6 @@ const BAZAAR_INPUT = {
   type: 'http',
   method: 'POST',
   bodyType: 'json',
-  discoverable: true,
   body: {
     url: 'https://example.com/paid-endpoint',
     expect: {
@@ -286,6 +285,65 @@ const BAZAAR_INPUT = {
       max_amount: '10000 — optional, base units',
     },
   },
+};
+
+/*
+ * Замер 07.09 (первый настоящий платёж через bazaar-list.mjs): фасилитатор
+ * ответил rejected, "info failed schema validation". Причины две, обе против
+ * официального createBodyDiscoveryExtension из @x402/extensions:
+ *   1) рядом с info обязано лежать schema — JSON Schema 2020-12, по которой
+ *      фасилитатор и проверяет info; у меня его не было вовсе;
+ *   2) input там закрыт (additionalProperties: false), а я клал в него
+ *      discoverable: true — это поле из v1 outputSchema, в v2 его нет.
+ * Поэтому discoverable теперь добавляется только в v1, а v2 несёт info+schema.
+ */
+const BAZAAR_SCHEMA = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  properties: {
+    input: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', const: 'http' },
+        method: { type: 'string', enum: ['POST', 'PUT', 'PATCH'] },
+        bodyType: { type: 'string', enum: ['json', 'form-data', 'text'] },
+        body: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'The x402 endpoint to probe (unpaid). Must be https.' },
+            expect: {
+              type: 'object',
+              properties: {
+                pay_to: { type: 'string', description: 'Recipient address you were promised; mismatch is a blocking finding.' },
+                network: { type: 'string', description: 'Network you intend to pay on, e.g. base or eip155:8453.' },
+                max_amount: { type: 'string', description: 'Price ceiling in base units (USDC has 6 decimals).' },
+              },
+            },
+          },
+          required: ['url'],
+        },
+      },
+      required: ['type', 'method', 'bodyType', 'body'],
+      additionalProperties: false,
+    },
+    output: {
+      type: 'object',
+      properties: {
+        type: { type: 'string' },
+        example: {
+          type: 'object',
+          properties: {
+            verdict: { type: 'string', enum: ['safe_to_attempt', 'pay_with_caution', 'do_not_pay', 'unreachable'] },
+            http_status: { type: 'integer' },
+            challenge: { type: 'object' },
+            findings: { type: 'array' },
+          },
+        },
+      },
+      required: ['type'],
+    },
+  },
+  required: ['input'],
 };
 
 const BAZAAR_OUTPUT = {
@@ -314,7 +372,8 @@ function requirementsV1(resource) {
     // invalid_exact_evm_token_name_mismatch, потому что подпись собирается
     // по домену и расходится побайтно.
     extra: { name: 'USD Coin', version: '2' },
-    outputSchema: { input: BAZAAR_INPUT, output: BAZAAR_OUTPUT },
+    // v1-формат каталога: discoverable живёт прямо в input.
+    outputSchema: { input: { ...BAZAAR_INPUT, discoverable: true }, output: BAZAAR_OUTPUT },
   };
 }
 
@@ -351,7 +410,7 @@ function offer(resource) {
     },
     accepts: [requirementsV2(resource), requirementsV1(resource)],
     extensions: {
-      bazaar: { info: { input: BAZAAR_INPUT, output: BAZAAR_OUTPUT } },
+      bazaar: { info: { input: BAZAAR_INPUT, output: BAZAAR_OUTPUT }, schema: BAZAAR_SCHEMA },
     },
   };
 }

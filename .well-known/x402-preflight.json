@@ -1,21 +1,21 @@
 {
   "service": "x402-preflight",
   "summary": "Check an x402 endpoint before you pay it.",
-  "base_url": "https://franchise-requesting-trackback-barcelona.trycloudflare.com",
+  "base_url": "https://mambo-boot-budapest-cons.trycloudflare.com",
   "status": "live",
   "endpoints": {
-    "health": "https://franchise-requesting-trackback-barcelona.trycloudflare.com/health",
-    "schema": "https://franchise-requesting-trackback-barcelona.trycloudflare.com/schema",
-    "preflight": "https://franchise-requesting-trackback-barcelona.trycloudflare.com/preflight"
+    "health": "https://mambo-boot-budapest-cons.trycloudflare.com/health",
+    "schema": "https://mambo-boot-budapest-cons.trycloudflare.com/schema",
+    "preflight": "https://mambo-boot-budapest-cons.trycloudflare.com/preflight"
   },
   "price": {
     "amount": "0.004",
     "asset": "USDC",
     "network": "base"
   },
-  "payout_wallet": "0xdD107957D2F39A0EAfE8A8679aCb2f227aa42b10",
+  "payout_wallet": "0xB5bC75A1085345B89531DE4bfA1FF19EE8F9c29a",
   "method": "POST /preflight with {\"url\": \"...\", \"expect\": {...}}",
   "note": "The base URL rotates. Read this document rather than hard-coding an address. Unpaid probe only: reports what an endpoint advertises, not what it delivers after payment.",
-  "last_verified": "2026-09-07T05:16:36.955Z",
-  "updated": "2026-09-07T05:16:37.113Z"
+  "last_verified": "2026-09-08T07:04:10.890Z",
+  "updated": "2026-09-08T07:04:23.252Z"
 }
