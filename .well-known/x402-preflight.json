@@ -1,12 +1,12 @@
 {
   "service": "x402-preflight",
   "summary": "Check an x402 endpoint before you pay it.",
-  "base_url": "https://skating-cure-settle-rev.trycloudflare.com",
+  "base_url": "https://ingredients-load-hand-coated.trycloudflare.com",
   "status": "live",
   "endpoints": {
-    "health": "https://skating-cure-settle-rev.trycloudflare.com/health",
-    "schema": "https://skating-cure-settle-rev.trycloudflare.com/schema",
-    "preflight": "https://skating-cure-settle-rev.trycloudflare.com/preflight"
+    "health": "https://ingredients-load-hand-coated.trycloudflare.com/health",
+    "schema": "https://ingredients-load-hand-coated.trycloudflare.com/schema",
+    "preflight": "https://ingredients-load-hand-coated.trycloudflare.com/preflight"
   },
   "price": {
     "amount": "0.004",
@@ -16,6 +16,6 @@
   "payout_wallet": "0xB5bC75A1085345B89531DE4bfA1FF19EE8F9c29a",
   "method": "POST /preflight with {\"url\": \"...\", \"expect\": {...}}",
   "note": "The base URL rotates. Read this document rather than hard-coding an address. Unpaid probe only: reports what an endpoint advertises, not what it delivers after payment.",
-  "last_verified": "2026-09-08T13:07:47.804Z",
-  "updated": "2026-09-08T13:07:47.834Z"
+  "last_verified": "2026-09-08T13:12:29.686Z",
+  "updated": "2026-09-08T13:12:29.727Z"
 }
