@@ -16,6 +16,6 @@
   "payout_wallet": "0xB5bC75A1085345B89531DE4bfA1FF19EE8F9c29a",
   "method": "POST /preflight with {\"url\": \"...\", \"expect\": {...}}",
   "note": "The base URL rotates. Read this document rather than hard-coding an address. Unpaid probe only: reports what an endpoint advertises, not what it delivers after payment.",
-  "last_verified": "2026-09-08T07:04:10.890Z",
-  "updated": "2026-09-08T07:04:23.252Z"
+  "last_verified": "2026-09-08T07:04:40.891Z",
+  "updated": "2026-09-08T07:04:40.924Z"
 }
