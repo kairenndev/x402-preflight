@@ -48,7 +48,7 @@ const FACILITATOR = process.env.FACILITATOR || 'https://facilitator.payai.networ
 const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const NETWORK_V1 = 'base';           // как сеть зовётся в x402 v1
 const NETWORK_V2 = 'eip155:8453';    // она же в v2, CAIP-2
-const PRICE_UNITS = '4000';          // 0.004 USDC, у USDC 6 знаков
+const PRICE_UNITS = '100000';        // 0.10 USDC, у USDC 6 знаков
 
 /* ---------------------------------------------------------------- журнал обращений
 
@@ -295,7 +295,7 @@ async function preflight(target, expect = {}) {
 
 /* ------------------------------------------------------------------ маршруты */
 
-const PRICE_USDC = '0.004';
+const PRICE_USDC = '0.10';
 const DESCRIPTION = 'One unpaid-probe preflight report for an x402 endpoint.';
 
 /*
@@ -545,6 +545,91 @@ const server = createServer(async (req, res) => {
       verdicts: ['safe_to_attempt', 'pay_with_caution', 'do_not_pay', 'unreachable'],
       limits: { probe_timeout_seconds: 10, body_limit_kb: 64, targets: 'public http(s) only' },
       disclaimer: 'Unpaid probe. Reports what an endpoint advertises; does not guarantee post-payment delivery.',
+    });
+  }
+
+  /*
+   * OpenAPI. Обходчик Agent402 запросил GET /openapi.json 09.09 в 20:32 МСК и
+   * получил 404 (logs/requests.jsonl) — то есть индексатор ищет машинное
+   * описание по этому пути, а не по /schema. Отдаём 3.1 с полями расширения
+   * x-x402, чтобы цена и получатель читались без похода за 402.
+   */
+  if (path === '/openapi.json' || path === '/openapi') {
+    const origin = 'https://' + (req.headers.host || 'localhost');
+    return json(res, 200, {
+      openapi: '3.1.0',
+      info: {
+        title: 'x402 Preflight',
+        version: '1.1.0',
+        summary: 'Check an x402 endpoint before you pay it.',
+        description: DESCRIPTION,
+      },
+      servers: [{ url: origin }],
+      'x-x402': {
+        version: [1, 2],
+        network: NETWORK_V2,
+        asset: USDC_BASE,
+        asset_symbol: 'USDC',
+        scheme: 'exact',
+        pay_to: PAYOUT,
+        price: PRICE_USDC,
+        price_base_units: PRICE_UNITS,
+        facilitator: FACILITATOR,
+      },
+      paths: {
+        '/health': {
+          get: {
+            summary: 'Liveness',
+            responses: { 200: { description: 'Service is up',
+              content: { 'application/json': { schema: { type: 'object',
+                properties: { status: { type: 'string' }, service: { type: 'string' }, time: { type: 'string', format: 'date-time' } } } } } } },
+          },
+        },
+        '/schema': {
+          get: {
+            summary: 'Human- and machine-readable service description',
+            responses: { 200: { description: 'Service card', content: { 'application/json': { schema: { type: 'object' } } } } },
+          },
+        },
+        '/preflight': {
+          post: {
+            summary: DESCRIPTION,
+            description: 'Paid. Costs ' + PRICE_USDC + ' USDC on Base. Send an x402 payment header; without one the endpoint answers 402 with the payment requirements.',
+            'x-x402': { price: PRICE_USDC, asset: 'USDC', network: NETWORK_V2, pay_to: PAYOUT },
+            requestBody: {
+              required: true,
+              content: { 'application/json': { schema: {
+                type: 'object',
+                required: ['url'],
+                properties: {
+                  url: { type: 'string', format: 'uri', description: 'Public http(s) x402 endpoint to probe.' },
+                  expect: { type: 'object', properties: {
+                    pay_to: { type: 'string', description: 'Recipient you expect; mismatch is reported.' },
+                    network: { type: 'string', description: 'Network you expect, e.g. base.' },
+                    max_amount: { type: 'string', description: 'Your ceiling in base units, e.g. 10000.' },
+                  } },
+                },
+              } } },
+            },
+            responses: {
+              200: { description: 'Preflight report', content: { 'application/json': { schema: {
+                type: 'object',
+                properties: {
+                  verdict: { type: 'string', enum: ['safe_to_attempt', 'pay_with_caution', 'do_not_pay', 'unreachable'] },
+                  challenge: { type: 'object' },
+                  findings: { type: 'array', items: { type: 'object', properties: {
+                    level: { type: 'string', enum: ['ok', 'warning', 'blocking'] },
+                    code: { type: 'string' },
+                    detail: { type: 'string' },
+                  } } },
+                },
+              } } } },
+              402: { description: 'Payment required; body carries x402 payment requirements (v2 and v1)' },
+              405: { description: 'Method not allowed' },
+            },
+          },
+        },
+      },
     });
   }
 
