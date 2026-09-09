@@ -14,6 +14,7 @@
  */
 
 import { createServer } from 'node:http';
+import { appendFile } from 'node:fs';
 
 const PORT = Number(process.env.PORT || 8402);
 /*
@@ -48,6 +49,38 @@ const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const NETWORK_V1 = 'base';           // как сеть зовётся в x402 v1
 const NETWORK_V2 = 'eip155:8453';    // она же в v2, CAIP-2
 const PRICE_UNITS = '4000';          // 0.004 USDC, у USDC 6 знаков
+
+/* ---------------------------------------------------------------- журнал обращений
+
+ * Зачем. За 16 суток на кошелёк пришёл ровно один перевод от чужого адреса
+ * (замер по цепи 09.09), и это была награда, а не покупка. Но до сих пор
+ * нельзя было ответить даже на вопрос попроще: заходил ли к сервису хоть
+ * кто-нибудь? Сервер не вёл никакого учёта, стандартный вывод супервизор
+ * выбрасывал в stdio:'ignore'. «Ноль продаж» и «ноль посетителей» — разные
+ * диагнозы с разным лечением, и различить их было нечем.
+ *
+ * Пишем строку на каждый завершённый запрос. IP берётся из заголовков
+ * туннеля: прямого подключения снаружи нет, сервер слушает петлю.
+ */
+const REQ_LOG = new URL('../../logs/requests.jsonl', import.meta.url);
+
+function logRequest(req, res, path, started) {
+  try {
+    const h = req.headers;
+    appendFile(REQ_LOG, JSON.stringify({
+      t: new Date().toISOString(),
+      m: req.method,
+      path,
+      status: res.statusCode,
+      ms: Date.now() - started,
+      // 402 без заголовка — просто посмотрели; с заголовком — пытались платить
+      paid: Boolean(h['x-payment'] || h['payment-signature']),
+      ip: (h['cf-connecting-ip'] || h['x-forwarded-for'] || '').split(',')[0].trim() || null,
+      ua: (h['user-agent'] || '').slice(0, 160) || null,
+      ref: (h.referer || '').slice(0, 160) || null,
+    }) + '\n', () => {});
+  } catch { /* учёт не должен ронять сервис */ }
+}
 
 /* ---------------------------------------------------------------- утилиты */
 
@@ -468,6 +501,8 @@ async function facilitator(route, body) {
 const server = createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   const path = u.pathname.replace(/\/+$/, '') || '/';
+  const started = Date.now();
+  res.on('finish', () => logRequest(req, res, path, started));
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
