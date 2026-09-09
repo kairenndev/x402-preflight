@@ -16,6 +16,17 @@
 import { createServer } from 'node:http';
 
 const PORT = Number(process.env.PORT || 8402);
+/*
+ * Слушать только петлю.
+ *
+ * Замер 09.09 (`netstat -ano`): `server.listen(PORT)` без адреса поднимал
+ * `0.0.0.0:8402` и `[::]:8402` — сервис был доступен любому в той же сети,
+ * помимо туннеля. Наружу он должен ходить ровно одним путём: cloudflared и
+ * ssh к srv.us подключаются к `127.0.0.1:8402`, петли им достаточно.
+ * Найдено Сержем при разборе, чей это туннель. Правило: наружу — только
+ * через туннель, локальная привязка всегда явная.
+ */
+const HOST = process.env.HOST || '127.0.0.1';
 const PAYOUT = '0xB5bC75A1085345B89531DE4bfA1FF19EE8F9c29a'; // Base, USDC
 
 /*
@@ -608,7 +619,7 @@ const server = createServer(async (req, res) => {
   json(res, 404, { error: 'not_found', see: '/schema' });
 });
 
-server.listen(PORT, () => {
-  console.log('x402-preflight слушает на :' + PORT);
+server.listen(PORT, HOST, () => {
+  console.log(`x402-preflight слушает на ${HOST}:${PORT}`);
   console.log('выплаты на', PAYOUT);
 });
