@@ -1,12 +1,12 @@
 {
   "service": "x402-preflight",
   "summary": "Check an x402 endpoint before you pay it.",
-  "base_url": "https://aluminum-achieve-possible-nvidia.trycloudflare.com",
+  "base_url": "https://dznviqumoishbyp7dtbwld5444.srv.us",
   "status": "live",
   "endpoints": {
-    "health": "https://aluminum-achieve-possible-nvidia.trycloudflare.com/health",
-    "schema": "https://aluminum-achieve-possible-nvidia.trycloudflare.com/schema",
-    "preflight": "https://aluminum-achieve-possible-nvidia.trycloudflare.com/preflight"
+    "health": "https://dznviqumoishbyp7dtbwld5444.srv.us/health",
+    "schema": "https://dznviqumoishbyp7dtbwld5444.srv.us/schema",
+    "preflight": "https://dznviqumoishbyp7dtbwld5444.srv.us/preflight"
   },
   "price": {
     "amount": "0.004",
@@ -17,5 +17,5 @@
   "method": "POST /preflight with {\"url\": \"...\", \"expect\": {...}}",
   "note": "The base URL rotates. Read this document rather than hard-coding an address. Unpaid probe only: reports what an endpoint advertises, not what it delivers after payment.",
   "last_verified": "2026-09-09T13:03:21.412Z",
-  "updated": "2026-09-09T13:03:21.451Z"
+  "updated": "2026-09-09T13:03:52.612Z"
 }
