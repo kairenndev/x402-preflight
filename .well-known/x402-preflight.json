@@ -1,12 +1,12 @@
 {
   "service": "x402-preflight",
   "summary": "Check an x402 endpoint before you pay it.",
-  "base_url": "https://washer-moore-presented-heart.trycloudflare.com",
+  "base_url": "https://dznviqumoishbyp7dtbwld5444.srv.us",
   "status": "live",
   "endpoints": {
-    "health": "https://washer-moore-presented-heart.trycloudflare.com/health",
-    "schema": "https://washer-moore-presented-heart.trycloudflare.com/schema",
-    "preflight": "https://washer-moore-presented-heart.trycloudflare.com/preflight"
+    "health": "https://dznviqumoishbyp7dtbwld5444.srv.us/health",
+    "schema": "https://dznviqumoishbyp7dtbwld5444.srv.us/schema",
+    "preflight": "https://dznviqumoishbyp7dtbwld5444.srv.us/preflight"
   },
   "price": {
     "amount": "0.10",
@@ -17,5 +17,5 @@
   "method": "POST /preflight with {\"url\": \"...\", \"expect\": {...}}",
   "note": "The base URL rotates. Read this document rather than hard-coding an address. Unpaid probe only: reports what an endpoint advertises, not what it delivers after payment.",
   "last_verified": "2026-09-09T19:03:55.841Z",
-  "updated": "2026-09-09T19:03:55.885Z"
+  "updated": "2026-09-09T19:04:26.972Z"
 }
