@@ -518,7 +518,30 @@ const server = createServer(async (req, res) => {
     return json(res, 200, { status: 'ok', service: 'x402-preflight', time: new Date().toISOString() });
   }
 
-  if (path === '/' || path === '/.well-known/x402' || path === '/schema') {
+  /*
+   * Манифест обнаружения. Замер 10.09 по agent402.tools/api/index (100 продавцов):
+   * 58 найдены по /.well-known/x402, 7 по /openapi.json, у 60 source=manifest.
+   * Форма манифеста у них одна и та же — {version, resources[], instructions},
+   * см. https://secondopinionx402.com/.well-known/x402. Мы по этому пути отдавали
+   * СВОЮ карточку сервиса: обходчик её не разбирал, нас в индексе нет (0 совпадений
+   * по srv.us). Поэтому путь отделён и отдаёт манифест в их форме.
+   */
+  if (path === '/.well-known/x402') {
+    const origin = 'https://' + (req.headers.host || 'localhost');
+    return json(res, 200, {
+      version: 1,
+      resources: [origin + '/preflight'],
+      instructions:
+        'x402 Preflight: probe any x402 endpoint before you pay it. POST /preflight ' +
+        'with {"url": "https://…"} and an optional expect{pay_to,network,max_amount}; ' +
+        'the answer is a verdict (safe_to_attempt | pay_with_caution | do_not_pay | ' +
+        'unreachable), the parsed 402 challenge and the findings behind the verdict. ' +
+        'Costs ' + PRICE_USDC + ' USDC on Base (x402 v1 and v2, scheme exact). ' +
+        'Machine docs: /openapi.json, /schema. Liveness: /health.',
+    });
+  }
+
+  if (path === '/' || path === '/schema') {
     return json(res, 200, {
       name: 'x402 Preflight',
       summary: 'Check an x402 endpoint before you pay it.',
