@@ -1,12 +1,12 @@
 {
   "service": "x402-preflight",
   "summary": "Check an x402 endpoint before you pay it.",
-  "base_url": "https://bidding-banner-joel-among.trycloudflare.com",
+  "base_url": "https://dznviqumoishbyp7dtbwld5444.srv.us",
   "status": "live",
   "endpoints": {
-    "health": "https://bidding-banner-joel-among.trycloudflare.com/health",
-    "schema": "https://bidding-banner-joel-among.trycloudflare.com/schema",
-    "preflight": "https://bidding-banner-joel-among.trycloudflare.com/preflight"
+    "health": "https://dznviqumoishbyp7dtbwld5444.srv.us/health",
+    "schema": "https://dznviqumoishbyp7dtbwld5444.srv.us/schema",
+    "preflight": "https://dznviqumoishbyp7dtbwld5444.srv.us/preflight"
   },
   "price": {
     "amount": "0.10",
@@ -16,6 +16,6 @@
   "payout_wallet": "0xB5bC75A1085345B89531DE4bfA1FF19EE8F9c29a",
   "method": "POST /preflight with {\"url\": \"...\", \"expect\": {...}}",
   "note": "The base URL rotates. Read this document rather than hard-coding an address. Unpaid probe only: reports what an endpoint advertises, not what it delivers after payment.",
-  "last_verified": "2026-09-10T03:54:24.988Z",
-  "updated": "2026-09-10T03:54:25.065Z"
+  "last_verified": "2026-09-10T03:55:54.688Z",
+  "updated": "2026-09-10T03:56:26.059Z"
 }
