@@ -48,7 +48,13 @@ const FACILITATOR = process.env.FACILITATOR || 'https://facilitator.payai.networ
 const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const NETWORK_V1 = 'base';           // как сеть зовётся в x402 v1
 const NETWORK_V2 = 'eip155:8453';    // она же в v2, CAIP-2
-const PRICE_UNITS = '100000';        // 0.10 USDC, у USDC 6 знаков
+const PRICE_UNITS = '4000';          // 0.004 USDC, у USDC 6 знаков.
+// Замер 10.09 (research/agent402-chains-2026-09-10.md, разделы 6-8): роутер
+// agent402 держит нашу цену в своей карточке как 0.004 и не обновляет её при
+// обходе - при 0.10 на сервере любой платёж по их котировке отбивался бы, то
+// есть листинг был неоплачиваем. Медиана прямых аналогов (одиночная проверка
+// одного эндпоинта) - 0.005, диапазон 0.002-0.005. 0.10 была ошибкой захода
+// №13: тир брался из выручки продавцов вообще, а не аналогов.
 
 /* ---------------------------------------------------------------- журнал обращений
 
@@ -295,8 +301,34 @@ async function preflight(target, expect = {}) {
 
 /* ------------------------------------------------------------------ маршруты */
 
-const PRICE_USDC = '0.10';
+const PRICE_USDC = '0.004';
 const DESCRIPTION = 'One unpaid-probe preflight report for an x402 endpoint.';
+
+/*
+ * Текст для каталогов, отдельно от DESCRIPTION.
+ *
+ * DESCRIPTION едет в 402-вызов и в декларацию Bazaar, там нужна одна строка.
+ * А поиск agent402 (`POST /api/route`) ранжирует по summary/description из
+ * openapi, и замер 10.09 показал: на дословную нашу фразу мы #1 из 10, на
+ * пересказ «probe an x402 endpoint before paying it» нас нет в топ-5, на
+ * «preflight verdict safe_to_attempt do_not_pay» — нет в топ-10. У всех пяти
+ * конкурентов описания на 5–8 строк с синонимами. Отсюда текст ниже: те же
+ * возможности, но словами, которыми покупатель спрашивает. Ничего, чего
+ * сервис не делает, здесь нет — замер в research/agent402-router-2026-09-10.md.
+ */
+const LISTING_SUMMARY =
+  'Verify any third-party x402 endpoint is alive, reachable and correctly configured before you pay it: ' +
+  'one unpaid preflight request, no payment is ever sent. Measures reachability and response latency, ' +
+  'decodes the payment requirements from both x402 dialects - v1 JSON body and v2 base64 PAYMENT-REQUIRED ' +
+  'header - validates accepts, network, price, payTo and expiry, and returns a verdict ' +
+  '(safe_to_attempt | pay_with_caution | do_not_pay | unreachable) plus the parsed challenge ' +
+  '(price in base units, asset, network, payTo, resource, expiry) and the findings behind the verdict. ' +
+  'Optional expect{pay_to,network,max_amount} turns it into an assertion: a recipient, chain or price that ' +
+  'differs from what you expected is reported as a mismatch - protection against ghost endpoints, dead quotes, ' +
+  'a payTo that does not match the catalogue listing, and USDC wasted on an endpoint that is down. ' +
+  'Public http(s) targets only, 10 s probe timeout, 64 KB body limit. ' +
+  'Limitation: an unpaid probe reports what the endpoint advertises at observation time - not post-payment ' +
+  'delivery, not future uptime - ' + PRICE_USDC + ' USDC per paid call through x402';
 
 /*
  * Требования к оплате в двух видах.
@@ -324,7 +356,7 @@ const BAZAAR_INPUT = {
   body: {
     url: 'https://example.com/paid-endpoint',
     expect: {
-      pay_to: '0x… optional: recipient you were promised',
+      pay_to: '0x... optional: recipient you were promised',
       network: 'base — optional',
       max_amount: '10000 — optional, base units',
     },
@@ -395,7 +427,7 @@ const BAZAAR_OUTPUT = {
   example: {
     verdict: 'do_not_pay',
     http_status: 402,
-    challenge: { pay_to: ['0x…'], networks: ['base'], amounts: ['10000'] },
+    challenge: { pay_to: ['0x...'], networks: ['base'], amounts: ['10000'] },
     findings: [{ level: 'blocking', code: 'payto_mismatch', detail: 'Endpoint asks payment to a different address than you expected.' }],
   },
 };
@@ -412,7 +444,7 @@ function requirementsV1(resource) {
     maxTimeoutSeconds: 120,
     asset: USDC_BASE,
     // Имя из EIP-712 домена самого контракта, а не тикер: на Base это "USD Coin".
-    // Считано с 0x8335…2913 замером 02.09; с "USDC" фасилитатор отвечает
+    // Считано с 0x8335...2913 замером 02.09; с "USDC" фасилитатор отвечает
     // invalid_exact_evm_token_name_mismatch, потому что подпись собирается
     // по домену и расходится побайтно.
     extra: { name: 'USD Coin', version: '2' },
@@ -433,7 +465,7 @@ function requirementsV2(resource) {
     description: DESCRIPTION,
     mimeType: 'application/json',
     // Имя из EIP-712 домена самого контракта, а не тикер: на Base это "USD Coin".
-    // Считано с 0x8335…2913 замером 02.09; с "USDC" фасилитатор отвечает
+    // Считано с 0x8335...2913 замером 02.09; с "USDC" фасилитатор отвечает
     // invalid_exact_evm_token_name_mismatch, потому что подпись собирается
     // по домену и расходится побайтно.
     extra: { name: 'USD Coin', version: '2' },
@@ -532,12 +564,10 @@ const server = createServer(async (req, res) => {
       version: 1,
       resources: [origin + '/preflight'],
       instructions:
-        'x402 Preflight: probe any x402 endpoint before you pay it. POST /preflight ' +
-        'with {"url": "https://…"} and an optional expect{pay_to,network,max_amount}; ' +
-        'the answer is a verdict (safe_to_attempt | pay_with_caution | do_not_pay | ' +
-        'unreachable), the parsed 402 challenge and the findings behind the verdict. ' +
-        'Costs ' + PRICE_USDC + ' USDC on Base (x402 v1 and v2, scheme exact). ' +
-        'Machine docs: /openapi.json, /schema. Liveness: /health.',
+        'x402 Preflight. ' + LISTING_SUMMARY + ' ' +
+        'Call it as POST /preflight with {"url": "https://<target>"} and an optional ' +
+        'expect{pay_to,network,max_amount}. Costs ' + PRICE_USDC + ' USDC on Base ' +
+        '(x402 v1 and v2, scheme exact). Machine docs: /openapi.json, /schema. Liveness: /health.',
     });
   }
 
@@ -562,7 +592,7 @@ const server = createServer(async (req, res) => {
         { path: '/schema', price: 'free', method: 'GET', returns: 'this document' },
         { path: '/preflight', price: PRICE_USDC + ' USDC', method: 'POST',
           body: { url: 'https://example.com/paid-endpoint',
-                  expect: { pay_to: '0x… (optional)', network: 'base (optional)', max_amount: '10000 (optional, base units)' } },
+                  expect: { pay_to: '0x... (optional)', network: 'base (optional)', max_amount: '10000 (optional, base units)' } },
           returns: 'verdict, parsed challenge, findings' },
       ],
       verdicts: ['safe_to_attempt', 'pay_with_caution', 'do_not_pay', 'unreachable'],
@@ -585,7 +615,7 @@ const server = createServer(async (req, res) => {
         title: 'x402 Preflight',
         version: '1.1.0',
         summary: 'Check an x402 endpoint before you pay it.',
-        description: DESCRIPTION,
+        description: LISTING_SUMMARY,
       },
       servers: [{ url: origin }],
       'x-x402': {
@@ -616,7 +646,7 @@ const server = createServer(async (req, res) => {
         },
         '/preflight': {
           post: {
-            summary: DESCRIPTION,
+            summary: LISTING_SUMMARY,
             description: 'Paid. Costs ' + PRICE_USDC + ' USDC on Base. Send an x402 payment header; without one the endpoint answers 402 with the payment requirements.',
             'x-x402': { price: PRICE_USDC, asset: 'USDC', network: NETWORK_V2, pay_to: PAYOUT },
             requestBody: {
