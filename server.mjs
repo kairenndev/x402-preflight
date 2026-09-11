@@ -317,8 +317,9 @@ const DESCRIPTION = 'One unpaid-probe preflight report for an x402 endpoint.';
  * сервис не делает, здесь нет — замер в research/agent402-router-2026-09-10.md.
  */
 const LISTING_SUMMARY =
-  'Verify any third-party x402 endpoint is alive, reachable and correctly configured before you pay it: ' +
-  'one unpaid preflight request, no payment is ever sent. Measures reachability and response latency, ' +
+  'Probes a third-party x402 endpoint before you pay it and says whether paying is safe: ' +
+  'one unpaid preflight probe, no payment is ever sent. Checks the endpoint is alive, reachable and ' +
+  'correctly configured, measures response latency, ' +
   'decodes the payment requirements from both x402 dialects - v1 JSON body and v2 base64 PAYMENT-REQUIRED ' +
   'header - validates accepts, network, price, payTo and expiry, and returns a verdict ' +
   '(safe_to_attempt | pay_with_caution | do_not_pay | unreachable) plus the parsed challenge ' +
@@ -539,10 +540,20 @@ const server = createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'GET,POST,OPTIONS',
+      'access-control-allow-methods': 'GET,HEAD,POST,OPTIONS',
       'access-control-allow-headers': '*',
     });
     return res.end();
+  }
+
+  /*
+   * robots.txt: за 09-11.09 его запрашивали 142 раза (обходчик Agent402 берёт
+   * его перед каждым обходом карточки) и все 142 раза получали 404. Отдаём
+   * явное разрешение — обход платной стены нам нужен, это канал спроса.
+   */
+  if (path === '/robots.txt') {
+    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+    return res.end('User-agent: *\nAllow: /\n');
   }
 
   /* --- бесплатное: здоровье, описание, схема --- */
@@ -688,9 +699,30 @@ const server = createServer(async (req, res) => {
 
   /* --- платное --- */
   if (path === '/preflight') {
-    if (req.method !== 'POST') return json(res, 405, { error: 'method_not_allowed', use: 'POST' });
-
     const resource = 'https://' + (req.headers.host || 'localhost') + '/preflight';
+
+    /*
+     * GET и HEAD — это не «неверный метод», а запрос котировки. Так платную
+     * стену щупают каталоги и квотирующие агенты: за 09–11.09 в логе 77 таких
+     * обращений (PayAI-Uptime-Monitor 45 HEAD, x402-radar-prober 8 GET,
+     * allow402-quote 5, verantis-verifier 4, x402-directory-verifier 4,
+     * x402lens, x402all-freshness, csoai-catalog-trust по одному) — и все
+     * получали 405 вместо 402, то есть видели не платный ресурс, а поломку.
+     * Замер конкурентов 11.09: api.delx.ai отдаёт 402 и на GET, и на POST;
+     * api.agentstools.dev объявляет GET и отдаёт 402 и на GET, и на HEAD.
+     * Работу по-прежнему делает только POST — котировка её не запускает и
+     * денег не берёт.
+     */
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      return json(res, 402, offer(resource), {
+        'payment-required': Buffer.from(JSON.stringify(offer(resource))).toString('base64'),
+        'allow': 'GET, HEAD, POST, OPTIONS',
+      });
+    }
+    if (req.method !== 'POST') {
+      return json(res, 405, { error: 'method_not_allowed', use: 'POST' }, { 'allow': 'GET, HEAD, POST, OPTIONS' });
+    }
+
     const paid = req.headers['payment-signature'] || req.headers['x-payment'] || req.headers['x-payment-signature'];
 
     /*
