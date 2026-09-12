@@ -688,8 +688,8 @@ const server = createServer(async (req, res) => {
                   } } },
                 },
               } } } },
-              402: { description: 'Payment required; body carries x402 payment requirements (v2 and v1)' },
-              405: { description: 'Method not allowed' },
+              402: { description: 'Payment required; body carries x402 payment requirements (v2 and v1). GET and HEAD on this path return the same 402 quote without doing any work, so directories and quoting agents can read the price; only POST with a valid payment performs the probe.' },
+              405: { description: 'Method not allowed (methods other than GET, HEAD, POST, OPTIONS)' },
             },
           },
         },
@@ -703,7 +703,7 @@ const server = createServer(async (req, res) => {
 
     /*
      * GET и HEAD — это не «неверный метод», а запрос котировки. Так платную
-     * стену щупают каталоги и квотирующие агенты: за 09–11.09 в логе 77 таких
+     * стену щупают каталоги и квотирующие агенты: за 09–11.09 в логе 78 таких
      * обращений (PayAI-Uptime-Monitor 45 HEAD, x402-radar-prober 8 GET,
      * allow402-quote 5, verantis-verifier 4, x402-directory-verifier 4,
      * x402lens, x402all-freshness, csoai-catalog-trust по одному) — и все
